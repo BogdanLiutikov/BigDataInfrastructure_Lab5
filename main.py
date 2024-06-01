@@ -12,7 +12,7 @@ scaled_data = kmean.standard_scale(feature_data)
 kmean.train(scaled_data)
 
 pred = kmean.predict(scaled_data)
-logger.info(f'Prediction\n {pred}')
+pred.select('features', 'prediction').sample(0.01).show()
 
 kmean.plot(pred)
 
