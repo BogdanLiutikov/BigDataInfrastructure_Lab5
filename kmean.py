@@ -33,6 +33,8 @@ class KMean:
                                         'spark.dynamicAllocation.enabled': spark_config.get('spark.dynamicAllocation.enabled'),
                                     })
                                     .getOrCreate())
+        if self.spark is None:
+            raise ValueError('SparkSession is None')
 
         self.evaluator = ClusteringEvaluator(metricName='silhouette')
 
