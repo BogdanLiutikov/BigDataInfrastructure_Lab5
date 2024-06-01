@@ -1,17 +1,18 @@
 import os
 import pickle
+from configparser import ConfigParser
 
 import findspark
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
-from pyspark import SparkConf
 from pyspark.ml.clustering import KMeans
 from pyspark.ml.evaluation import ClusteringEvaluator
 from pyspark.ml.feature import PCA, StandardScaler, VectorAssembler
 from pyspark.ml.linalg import Vectors
-from pyspark.sql import DataFrame, Row, SparkSession
+from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import col
-from configparser import ConfigParser
+
+from logger import Logger
 
 findspark.init()
 
@@ -19,6 +20,7 @@ class KMean:
     def __init__(self, config_path: str = None) -> None:
         config = ConfigParser()
         config.read('config.ini')
+        self.logger = Logger(True).get_logger(__name__)
         spark_config = config['spark']
         self.spark: SparkSession = (SparkSession.builder
                                     .master('local')
@@ -29,7 +31,6 @@ class KMean:
                                         'spark.executor.cores': spark_config.get('spark.executor.cores'),
                                         'spark.executor.memory': spark_config.get('spark.executor.memory'),
                                         'spark.dynamicAllocation.enabled': spark_config.get('spark.dynamicAllocation.enabled'),
-                                        # 'spark.log.level': 'ALL'
                                     })
                                     .getOrCreate())
 
@@ -38,7 +39,7 @@ class KMean:
     def load_data(self, file_path: str, limit: int = None):
         if os.path.exists('schema.pickle'):
             with open('schema.pickle', 'rb') as s:
-                print('readSchema')
+                self.logger.info('readSchema')
                 schema = pickle.load(s)
                 self.data = self.spark.read.csv(file_path, sep='\t', header=True, schema=schema)
         else:
@@ -48,7 +49,7 @@ class KMean:
         self.data.printSchema()
         if limit:
             self.data = self.data.limit(limit)
-        print('Data count: ', self.data.count())
+        self.logger.info(f'Data count: {self.data.count()}')
         return self.data
 
     def make_feature_column(self, data: DataFrame, input_columns=['energy-kcal_100g', 'fat_100g', 'proteins_100g', 'carbohydrates_100g']):
@@ -72,8 +73,10 @@ class KMean:
         return scaled_data
 
     def train(self, data: DataFrame, k: int = 5):
+        self.logger.info('Training...')
         self.model = KMeans(k=k, seed=42, featuresCol='features',
                             predictionCol='prediction').fit(data)
+        self.logger.info('Finished')
 
     def predict(self, data: DataFrame):
         self.predictions = self.model.transform(data)
@@ -100,7 +103,7 @@ class KMean:
         centers_pandas_df['y'] = centers_pandas_df['pca_features'].apply(lambda x: x[1])
         centers_pandas_df = centers_pandas_df.drop(columns=['pca_features'])
 
-        print(centers_pandas_df.head())
+        self.logger.info(f'KMean Centers\n {centers_pandas_df.head()}')
 
         fig, ax = plt.subplots()
         labels = predictions.select('prediction').toPandas().iloc[:, 0]
